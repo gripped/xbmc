@@ -1177,6 +1177,10 @@ msgctxt "#13310"
 msgid "Zoom effect"
 msgstr "Kesan zum"
 
+msgctxt "#13350"
+msgid "Current playlist"
+msgstr "Senarai audio video semasa"
+
 msgctxt "#13399"
 msgid "Ignore articles when sorting (e.g. \"the\")"
 msgstr "Abaikan artikel apabila mengisih (cth: \"the\")"
@@ -1564,6 +1568,10 @@ msgstr "Latar Belakang"
 msgctxt "#33081"
 msgid "This file is stacked, select the part you want to play from."
 msgstr "Fail ini disusun tindan. Pilih bahagian yang anda ingin mainkan."
+
+msgctxt "#34100"
+msgid "Number of channels"
+msgstr "Jumlah saluran"
 
 msgctxt "#34122"
 msgid "Always"

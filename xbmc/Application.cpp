@@ -1627,9 +1627,12 @@ void CApplication::OnSettingChanged(const CSetting *setting)
   {
     // if the skin changes and the current theme is not the default one, reset
     // the theme to the default value (which will also change lookandfeel.skincolors
-    // which in turn will reload the skin
+    // which in turn will reload the skin.  Similarly, if the current skin font is not
+    // the default, reset it as well.
     if (settingId == "lookandfeel.skin" && CSettings::Get().GetString("lookandfeel.skintheme") != "SKINDEFAULT")
       CSettings::Get().SetString("lookandfeel.skintheme", "SKINDEFAULT");
+    else if (settingId == "lookandfeel.skin" && CSettings::Get().GetString("lookandfeel.font") != "Default")
+      CSettings::Get().SetString("lookandfeel.font", "Default");
     else
     {
       std::string builtin("ReloadSkin");
@@ -2796,6 +2799,13 @@ bool CApplication::OnAction(const CAction &action)
         g_application.m_pPlayer->SetPlaySpeed(1, g_application.m_muted);
         return true;
       }
+    }
+
+    // record current file
+    if (action.GetID() == ACTION_RECORD)
+    {
+      if (m_pPlayer->CanRecord())
+        m_pPlayer->Record(!m_pPlayer->IsRecording());
     }
 
     if (m_playerController->OnAction(action))
