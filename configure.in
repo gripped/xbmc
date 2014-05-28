@@ -692,7 +692,7 @@ case $host in
   powerpc-apple-darwin*)
      use_joystick=no
      use_vtbdecoder=no
-     use_crystalhd=noS
+     use_crystalhd=no
      ARCH="powerpc-osx"
      use_arch="ppc"
      ;;
