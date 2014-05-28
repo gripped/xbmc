@@ -42,7 +42,7 @@ SRCS += DVDVideoCodecStageFright.cpp
 endif
 
 
-SRCS += DVDVideoCodecExynos4.cpp DVDVideoCodecExynos.cpp 
+SRCS += DVDVideoCodecExynos4.cpp
 
 ifeq (@USE_EXYNOS5@,1)
 SRCS += DVDVideoCodecExynos5.cpp DVDVideoCodecExynos.cpp 
