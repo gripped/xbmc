@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([xbmc], [12.9.12], [http://issues.xbmc.org])
+AC_INIT([xbmc], [13.0.0], [http://issues.xbmc.org])
 AC_CONFIG_HEADERS([xbmc/config.h])
 AH_TOP([#pragma once])
 m4_include([m4/ax_prog_cc_for_build.m4])
@@ -17,6 +17,9 @@ AC_CANONICAL_HOST
 tolower(){
   echo "$@" | tr ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz
 }
+
+# workaround for autotools that don't set this
+abs_top_srcdir=${abs_top_srcdir=$(cd $srcdir; pwd)}
 
 # check for enabling additional players
 AC_DEFUN([XB_ADD_PLAYER],
@@ -137,7 +140,7 @@ wayland_disabled="== Wayland disabled. =="
 x11_enabled="== X11 enabled. =="
 x11_disabled="== X11 disabled. =="
 pulse_not_found="== Could not find libpulse. PulseAudio support disabled. =="
-pulse_disabled="== PulseAudio support manually disabled. =="
+pulse_disabled="== PulseAudio support disabled. =="
 dvdcss_enabled="== DVDCSS support enabled. =="
 dvdcss_disabled="== DVDCSS support disabled. =="
 hal_not_found="== Could not find hal. HAL support disabled. =="
@@ -622,24 +625,22 @@ case $host in
      use_sdl=no
      use_x11=no
      build_shared_lib=yes    
-    ;;
+     ;;
   i*86*-linux-gnu*|i*86*-*-linux-uclibc*)
      ARCH="i486-linux"
      if test "$use_cpu" = "no" -a "$cross_compiling" = "yes";  then
         use_arch="x86"
         use_cpu="i686"
-     else
-        target_platform=target_linux
      fi
+     use_static_ffmpeg=yes
      ;;
   x86_64-*-linux-gnu*|x86_64-*-linux-uclibc*)
      ARCH="x86_64-linux"
      if test "$use_cpu" = "no" -a "$cross_compiling" = "yes";  then
         use_arch="x86_64"
         use_cpu="x86_64"
-     else
-        target_platform=target_linux
      fi
+     use_static_ffmpeg=yes
      ;;
   i386-*-freebsd*)
      ARCH="x86-freebsd"
@@ -685,7 +686,7 @@ case $host in
   powerpc64-*-linux-gnu*|powerpc64-*-linux-uclibc*)
      ARCH="powerpc64-linux"
      ;;
-  arm*-*-linux-gnu*)
+  arm*-*-linux-gnu*|arm*-*-linux-uclibc*)
      ARCH="arm"
      use_arch="arm"
      ffmpeg_target_os=linux
@@ -695,6 +696,7 @@ case $host in
      use_sdl=no
      use_x11=no
      use_wayland=no
+     use_static_ffmpeg=yes
      ;;
   arm*-*linux-android*)
      target_platform=target_android
@@ -757,7 +759,7 @@ AC_CHECK_PROG(HAVE_GIT,git,"yes","no",)
 if test "$GIT_REV" = ""; then
   if test -f VERSION ; then
     GIT_REV=$(awk 'END{print substr($1,1,16)}' VERSION)
-  elif test "$HAVE_GIT" = "yes"; then
+  elif test "$HAVE_GIT" = "yes" -a -d ${abs_top_srcdir}/.git; then
     GIT_REV=$(git --no-pager log --abbrev=7 -n 1 --pretty=format:"%h %ci" HEAD | awk '{gsub("-", "");print $2"-"$1}')
   else
     GIT_REV="Unknown"
@@ -872,13 +874,13 @@ elif test "$use_arch" = "arm"; then
     fi
   fi
 fi
-if test "$target_platform" = "target_linux"; then
+if test "$use_static_ffmpeg" = "yes"; then
   USE_STATIC_FFMPEG=1
-  use_static_ffmpeg=yes
   AC_DEFINE([USE_STATIC_FFMPEG], [1], [link ffmpeg statically])
   # ffmpeg may depend on gnutls and vorbisenc, we add those libs at the end of linker
   # command in order to resolve any missing symbols
   GNUTLS_ALL_LIBS=`${PKG_CONFIG} --static --libs-only-l --silence-errors gnutls`
+  HOGWEED_ALL_LIBS=`${PKG_CONFIG} --static --libs-only-l --silence-errors hogweed nettle`
   VORBISENC_ALL_LIBS=`${PKG_CONFIG} --static --libs-only-l --silence-errors vorbisenc`
 fi 
 
@@ -1103,6 +1105,11 @@ AC_CHECK_HEADER([FLAC/stream_decoder.h],, AC_MSG_ERROR($missing_library))
 # we need to check for the header because if it exists we set the openssl
 # and gcrypt MT callback hooks. This is mostly so that libcurl operates 
 # in MT manner correctly.
+AC_MSG_CHECKING([for CRYPTO_set_locking_callback(0)])
+AC_TRY_LINK([],[CRYPTO_set_locking_callback(0);],
+                [have_curl_static=yes],
+                [have_curl_static=no])
+AC_MSG_RESULT($have_curl_static)
 AC_CHECK_HEADER([openssl/crypto.h], AC_DEFINE([HAVE_OPENSSL],[1],[Define if we have openssl]),)
 AC_CHECK_HEADER([gcrypt.h], gcrypt_headers_available=yes,gcrypt_headers_available=no)
 if test "$gcrypt_headers_available" = "yes"; then
@@ -1257,12 +1264,7 @@ XB_FIND_SONAME([VORBIS],      [vorbis])
 XB_FIND_SONAME([VORBISFILE],  [vorbisfile])
 XB_FIND_SONAME([MODPLUG],     [modplug])
 XB_FIND_SONAME([ASS],         [ass])
-
-#link statically against mpeg2 on ios  because of ios7
-#crash & burn if dyloaded
-if test "$ARCH" != "arm-osx" ; then
-  XB_FIND_SONAME([MPEG2],       [mpeg2])
-fi
+XB_FIND_SONAME([MPEG2],       [mpeg2])
 
 # Audio encoders
 if test "x$use_libmp3lame" != "xno"; then
@@ -1327,17 +1329,17 @@ if test "x$use_pulse" != "xno"; then
     fi
     USE_PULSE=0
   else
-    AC_CHECK_LIB([pulse],[main],,pulse_found="no")
-    AC_CHECK_LIB([pulse-simple],[main],,pulse_found="no")
+    PKG_CHECK_MODULES([PULSE], [libpulse >= 1.0],
+      [INCLUDES="$INCLUDES $PULSE_CFLAGS"; LIBS="$LIBS $PULSE_LIBS"; USE_PULSE=1;
+        HAVE_LIBPULSE=1; AC_DEFINE([HAVE_LIBPULSE],[1],[Pulse audio enabled])],
+      [pulse_found="no"; USE_PULSE=0; HAVE_LIBPULSE=0])
 
-    if test "x$pulse_found" != "xno"; then
-      USE_PULSE=1
-    elif test "x$use_pulse" = "xyes"; then
-      AC_MSG_ERROR($pulse_not_found)
-    else
-      use_pulse=no
-      USE_PULSE=0
-      AC_MSG_RESULT($pulse_not_found)
+    if test "$pulse_found" = "no"; then
+      if test "x$use_pulse" = "xyes"; then
+        AC_MSG_ERROR($pulse_not_found)
+      else
+        AC_MSG_RESULT($pulse_disabled)
+      fi
     fi
   fi
 else
@@ -1520,22 +1522,34 @@ else
   AC_DEFINE([HAVE_LIBSSH], [1], [Whether to use libSSH library.])
 fi
 
+# libcurl
+if test "x$have_curl_static" = "xyes"; then
+  AC_DEFINE([HAS_CURL_STATIC], [1], [Whether OpenSSL inside libcurl is static.])
+fi
+
 # libRTMP
 if test "$use_librtmp" != "no"; then
-  AC_CHECK_HEADERS([librtmp/log.h librtmp/amf.h librtmp/rtmp.h],,
-   [if test "$use_librtmp" = "yes"; then
-      AC_MSG_ERROR($librtmp_not_found)
-    elif test "$use_librtmp" != "no"; then
-      AC_MSG_NOTICE($librtmp_not_found)
-      use_librtmp="no"
-    fi
-   ])
-  if test "$use_librtmp" != "no"; then
-    XB_FIND_SONAME([RTMP], [rtmp], [use_librtmp])
-  fi
-  if test "$use_librtmp" != "no"; then
-    AC_DEFINE([HAS_LIBRTMP], [1], [Whether to use libRTMP library.])
-  fi
+  PKG_CHECK_MODULES([LIBRTMP], [librtmp],
+    [INCLUDES="$INCLUDES $LIBRTMP_CFLAGS"; LIBS="$LIBS $LIBRTMP_LIBS";
+      XB_FIND_SONAME([RTMP], [rtmp], [use_librtmp])
+      AC_DEFINE([HAS_LIBRTMP], [1], [Whether to use libRTMP library.])
+      RTMP_ALL_LIBS=$(${PKG_CONFIG} --static --libs-only-l --silence-errors librtmp)
+      test "$use_static_ffmpeg" = "yes" && LIBS="$LIBS $RTMP_ALL_LIBS"; LIBS="`echo $LIBS | sed 's/-lrtmp//g'`"],
+    [AC_CHECK_HEADERS([librtmp/log.h librtmp/amf.h librtmp/rtmp.h],,
+      [if test "$use_librtmp" = "yes"; then
+        AC_MSG_ERROR($librtmp_not_found)
+      elif test "$use_librtmp" != "no"; then
+        AC_MSG_NOTICE($librtmp_not_found)
+        use_librtmp="no"
+      fi
+      ])
+      if test "$use_librtmp" != "no"; then
+        XB_FIND_SONAME([RTMP], [rtmp], [use_librtmp])
+      fi
+      if test "$use_librtmp" != "no"; then
+        AC_DEFINE([HAS_LIBRTMP], [1], [Whether to use libRTMP library.])
+      fi
+    ])
 else
   AC_MSG_NOTICE($librtmp_disabled)
 fi
@@ -2519,7 +2533,6 @@ OUTPUT_FILES="Makefile \
     xbmc/cores/paplayer/Makefile \
     xbmc/cores/omxplayer/Makefile \
     lib/timidity/Makefile \
-    lib/xbadpcm/Makefile \
     lib/asap/Makefile \
     lib/nosefart/Makefile \
     lib/libsidplay2/Makefile \
@@ -2643,6 +2656,7 @@ AC_SUBST(USE_LIBAFPCLIENT)
 AC_SUBST(USE_AIRPLAY)
 AC_SUBST(USE_OPENMAX)
 AC_SUBST(USE_PULSE)
+AC_SUBST(HAVE_LIBPULSE)
 AC_SUBST(USE_XRANDR)
 AC_SUBST(USE_ALSA)
 AC_SUBST(USE_TEXTUREPACKER)
@@ -2661,6 +2675,7 @@ AC_SUBST(GTEST_CONFIGURED)
 AC_SUBST(USE_DOXYGEN)
 AC_SUBST(USE_PVR_ADDONS)
 AC_SUBST(GNUTLS_ALL_LIBS)
+AC_SUBST(HOGWEED_ALL_LIBS)
 AC_SUBST(VORBISENC_ALL_LIBS)
 
 # pushd and popd are not available in other shells besides bash, so implement
@@ -2719,7 +2734,7 @@ XB_CONFIG_MODULE([lib/ffmpeg], [
     # handle disables first, we do individual enables later
     ffmpg_config="$ffmpg_config --disable-muxers   --disable-encoders"
     ffmpg_config="$ffmpg_config --disable-devices  --disable-doc"
-    ffmpg_config="$ffmpg_config --disable-ffplay   --enable-ffmpeg"
+    ffmpg_config="$ffmpg_config --disable-ffplay   --disable-ffmpeg"
     ffmpg_config="$ffmpg_config --disable-ffprobe  --disable-ffserver"
     ffmpg_config="$ffmpg_config --enable-vda       --disable-crystalhd"
     ffmpg_config="$ffmpg_config --disable-decoder=mpeg_xvmc"
@@ -2795,7 +2810,6 @@ XB_CONFIG_MODULE([lib/ffmpeg], [
     LDFLAGS="$(echo "$LDFLAGS" | sed "s/-Wl,-Bsymbolic-functions//g")" \
     ./configure \
       --extra-cflags="$PASSED_CFLAGS $FFMPEG_EXTRACFLAGS" \
-      --disable-static \
       `if test "$use_debug" = "no"; then echo --disable-debug; fi` \
       `if test "$cross_compiling" = "yes"; then echo --enable-cross-compile; fi` \
       `if test "$use_arch" != "no"; then echo --arch=$use_arch; fi`\
@@ -2817,9 +2831,9 @@ XB_CONFIG_MODULE([lib/ffmpeg], [
       --disable-ffprobe \
       --disable-ffplay \
       --disable-ffserver \
-      --enable-ffmpeg \
+      --disable-ffmpeg \
       --disable-crystalhd \
-      `if test "$use_static_ffmpeg" = "yes"; then echo --enable-static; else echo --enable-shared; fi` \
+      `if test "$use_static_ffmpeg" = "yes"; then echo --enable-static --disable-shared; else echo --disable-static --enable-shared; fi` \
       --disable-doc \
       --enable-postproc \
       --enable-gpl \
@@ -2831,7 +2845,6 @@ XB_CONFIG_MODULE([lib/ffmpeg], [
       --enable-pthreads \
       --enable-runtime-cpudetect \
       `if test "$use_hardcoded_tables" = "yes"; then echo --enable-hardcoded-tables; else echo --disable-hardcoded-tables; fi`\
-      `if test "$target_platform" = "target_android" && test "$host_cpu" = "i686"; then echo --disable-mmx; fi #workaround for gcc 4.6 bug` \
       `if test "$target_platform" = "target_android"; then echo "--custom-libname-with-major=\\$(SLIBPREF)\\$(FULLNAME)-\\$(LIBMAJOR)-${ARCH}\\$(SLIBSUF)"; \
        else echo "--custom-libname-with-major=\\$(FULLNAME)-\\$(LIBMAJOR)-${ARCH}\\$(SLIBSUF)"; fi` \
       `case $host_cpu in i?86*) echo --disable-pic ;; *) echo --enable-pic ;; esac` \

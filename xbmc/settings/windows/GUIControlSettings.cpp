@@ -502,7 +502,7 @@ bool CGUIControlButtonSetting::OnClick()
     // prompt for the addon
     CSettingAddon *setting = (CSettingAddon *)m_pSetting;
     CStdString addonID = setting->GetValue();
-    if (!CGUIWindowAddonBrowser::SelectAddonID(setting->GetAddonType(), addonID, setting->AllowEmpty()) == 1)
+    if (CGUIWindowAddonBrowser::SelectAddonID(setting->GetAddonType(), addonID, setting->AllowEmpty()) != 1)
       return false;
 
     return setting->SetValue(addonID);
@@ -648,7 +648,7 @@ bool CGUIControlEditSetting::InputValidation(const std::string &input, void *dat
   if (editControl == NULL || editControl->GetSetting() == NULL)
     return true;
 
-  return editControl->GetSetting()->FromString(input);
+  return editControl->GetSetting()->CheckValidity(input);
 }
 
 CGUIControlSeparatorSetting::CGUIControlSeparatorSetting(CGUIImage *pImage, int id)

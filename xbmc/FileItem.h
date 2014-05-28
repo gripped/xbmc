@@ -295,6 +295,18 @@ public:
     return m_pvrTimerInfoTag;
   }
 
+  /*!
+   \brief Test if this item has a valid resume point set.
+   \return True if this item has a resume point and it is set, false otherwise.
+   */
+  bool IsResumePointSet() const;
+
+  /*!
+   \brief Return the current resume time.
+   \return The time in seconds from the start to resume playing from.
+   */
+  double GetCurrentResumeTime() const;
+
   inline bool HasPictureInfoTag() const
   {
     return m_pictureInfoTag != NULL;
@@ -331,6 +343,12 @@ public:
    \sa GetLocalArt
    */
   CStdString FindLocalArt(const std::string &artFile, bool useFolder) const;
+
+  /*! \brief Whether or not to skip searching for local art.
+   \return true if local art should be skipped for this item, false otherwise.
+   \sa GetLocalArt, FindLocalArt
+   */
+  bool SkipLocalArt() const;
 
   // Gets the .tbn file associated with this item
   CStdString GetTBNFile() const;

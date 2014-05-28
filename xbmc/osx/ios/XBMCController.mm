@@ -31,7 +31,6 @@
 #include "MusicInfoTag.h"
 #include "SpecialProtocol.h"
 #include "PlayList.h"
-#include "AEFactory.h"
 #include "ApplicationMessenger.h"
 #include "Application.h"
 #include "interfaces/AnnouncementManager.h"
@@ -181,7 +180,7 @@ void AnnounceBridge(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, con
     LOG(@"item: %@", item.description);
     [g_xbmcController performSelectorOnMainThread:@selector(onPlay:) withObject:item  waitUntilDone:NO];
   }
-  else if (msg == "OnSpeedChanged")
+  else if (msg == "OnSpeedChanged" || msg == "OnPause")
   {
     NSDictionary *item = [dict valueForKey:@"item"];
     NSDictionary *player = [dict valueForKey:@"player"];
@@ -189,15 +188,11 @@ void AnnounceBridge(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, con
     [item setValue:[NSNumber numberWithDouble:g_application.GetTime()] forKey:@"elapsed"];
     LOG(@"item: %@", item.description);
     [g_xbmcController performSelectorOnMainThread:@selector(OnSpeedChanged:) withObject:item  waitUntilDone:NO];
-  }
-  else if (msg == "OnPause")
-  {
-    CAEFactory::Suspend();
-    [g_xbmcController performSelectorOnMainThread:@selector(onPause:) withObject:[dict valueForKey:@"item"]  waitUntilDone:NO];
+    if (msg == "OnPause")
+      [g_xbmcController performSelectorOnMainThread:@selector(onPause:) withObject:[dict valueForKey:@"item"]  waitUntilDone:NO];
   }
   else if (msg == "OnStop")
   {
-    CAEFactory::Suspend();
     [g_xbmcController performSelectorOnMainThread:@selector(onStop:) withObject:[dict valueForKey:@"item"]  waitUntilDone:NO];
   }
 }
@@ -732,7 +727,6 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
     return ( nil );
 
   m_isPlayingBeforeInactive = NO;
-  m_isInterrupted = NO;
   m_bgTask = UIBackgroundTaskInvalid;
   m_playbackState = IOS_PLAYBACK_STOPPED;
 
@@ -1041,23 +1035,23 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
     m_isPlayingBeforeInactive = YES;
     CApplicationMessenger::Get().MediaPauseIfPlaying();
   }
+  g_Windowing.OnAppFocusChange(false);
 }
 
 - (void)enterForeground
 {
   PRINT_SIGNATURE();
+  g_Windowing.OnAppFocusChange(true);
   // when we come back, restore playing if we were.
   if (m_isPlayingBeforeInactive)
   {
     CApplicationMessenger::Get().MediaUnPause();
     m_isPlayingBeforeInactive = NO;
   }
-  m_isInterrupted = NO;
 }
 
 - (void)becomeInactive
 {
-  LOG(@"%s: was interrupted: %d", __PRETTY_FUNCTION__,  m_isInterrupted);
   // if we were interrupted, already paused here
   // else if user background us or lock screen, only pause video here, audio keep playing.
   if (g_application.m_pPlayer->IsPlayingVideo() && !g_application.m_pPlayer->IsPaused())
@@ -1067,20 +1061,6 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
   }
   // check whether we need disable network auto suspend.
   [self rescheduleNetworkAutoSuspend];
-}
-
-- (void)beginInterruption
-{
-  PRINT_SIGNATURE();
-  m_isInterrupted = YES;
-  CAEFactory::Suspend();
-}
-
-- (void)endInterruption
-{
-  PRINT_SIGNATURE();
-  if (CAEFactory::IsSuspended())
-    CAEFactory::Resume();
 }
 //--------------------------------------------------------------
 - (void)pauseAnimation

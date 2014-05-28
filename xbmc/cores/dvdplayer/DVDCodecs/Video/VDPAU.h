@@ -200,6 +200,7 @@ struct CVdpauProcessedPicture
   DVDVideoPicture DVDPic;
   VdpVideoSurface videoSurface;
   VdpOutputSurface outputSurface;
+  bool crop;
 };
 
 /**
@@ -443,7 +444,7 @@ protected:
   void PreCleanup();
   void InitMixer();
   bool GLInit();
-  void GLMapSurfaces();
+  void GLMapSurface(bool yuv, uint32_t source);
   void GLUnmapSurfaces();
   bool CheckStatus(VdpStatus vdp_st, int line);
   CEvent m_outMsgEvent;
@@ -610,6 +611,8 @@ protected:
   } m_DisplayState;
   CCriticalSection m_DecoderSection;
   CEvent         m_DisplayEvent;
+  int m_ErrorCount;
+  bool m_DecoderError;
 
   DllAvUtil     m_dllAvUtil;
   ThreadIdentifier m_decoderThread;

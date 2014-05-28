@@ -185,7 +185,7 @@ bool DVDPlayerCodec::Init(const CStdString &strFile, unsigned int filecache)
     m_EncodedSampleRate = m_pAudioCodec->GetEncodedSampleRate();
     m_Channels = m_pAudioCodec->GetChannels();
     m_ChannelInfo = m_pAudioCodec->GetChannelMap();
-
+    m_BitsPerCodedSample = static_cast<CDemuxStreamAudio*>(pStream)->iBitsPerSample;
   }
   if (nErrors >= 10)
   {
@@ -193,7 +193,22 @@ bool DVDPlayerCodec::Init(const CStdString &strFile, unsigned int filecache)
     return false;
   }
 
-  m_nDecodedLen = 0;
+  // test if seeking is supported
+  m_bCanSeek = false;
+  if (m_pInputStream->Seek(0, SEEK_POSSIBLE))
+  {
+    if (Seek(1) != DVD_NOPTS_VALUE)
+    {
+      // rewind stream to beginning
+      Seek(0);
+      m_bCanSeek = true;
+    }
+    else
+    {
+      m_pInputStream->Seek(0, SEEK_SET);
+      m_pDemuxer->Reset();
+    }
+  }
 
   if (m_Channels == 0) // no data - just guess and hope for the best
     m_Channels = 2;
@@ -203,6 +218,10 @@ bool DVDPlayerCodec::Init(const CStdString &strFile, unsigned int filecache)
 
   m_TotalTime = m_pDemuxer->GetStreamLength();
   m_Bitrate = m_pAudioCodec->GetBitRate();
+  if (!m_Bitrate && m_TotalTime)
+  {
+    m_Bitrate = (int)(((m_pInputStream->GetLength()*1000) / m_TotalTime) * 8);
+  }
   m_pDemuxer->GetStreamCodecName(m_nAudioStream,m_CodecName);
 
   m_strFileName = strFile;
@@ -258,11 +277,14 @@ int64_t DVDPlayerCodec::Seek(int64_t iSeekTime)
     CDVDDemuxUtils::FreeDemuxPacket(m_pPacket);
   m_pPacket = NULL;
 
-  m_pDemuxer->SeekTime((int)iSeekTime, false);
+  bool ret = m_pDemuxer->SeekTime((int)iSeekTime, false);
   m_pAudioCodec->Reset();
 
   m_decoded = NULL;
   m_nDecodedLen = 0;
+
+  if (!ret)
+    return DVD_NOPTS_VALUE;
 
   return iSeekTime;
 }
@@ -345,5 +367,5 @@ bool DVDPlayerCodec::CanInit()
 
 bool DVDPlayerCodec::CanSeek()
 {
-  return true;
+  return m_bCanSeek;
 }

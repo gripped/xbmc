@@ -3,15 +3,16 @@
   <section id="videos">
     <category id="videoplayer">
       <group id="2">
-        <setting id="videoplayer.rendermethod">
-          <visible>false</visible>
-        </setting>
-        <setting id="videoplayer.hqscalers">
-          <visible>false</visible>
-        </setting>
         <setting id="videoplayer.synctype">
           <visible>false</visible>
         </setting>
+      </group>
+    </category>
+    <category id="videoacceleration">
+      <group id="1">
+        <visible>false</visible>
+      </group>
+      <group id="3">
         <setting id="videoplayer.useframemtdec">
           <visible>false</visible>
         </setting>
@@ -47,11 +48,6 @@
           <control type="edit" format="integer" />
         </setting>
       </group>
-      <group id="3">
-        <setting id="videoscreen.vsync">
-          <default>2</default> <!-- VSYNC_ALWAYS -->
-        </setting>
-      </group>
     </category>
     <category id="audiooutput">
       <group id="1">
@@ -62,12 +58,6 @@
         </setting>
       </group>
       <group id="3">
-        <setting id="audiooutput.truehdpassthrough">
-          <visible>false</visible>
-        </setting>
-        <setting id="audiooutput.dtshdpassthrough">
-          <visible>false</visible>
-        </setting>
         <setting id="audiooutput.ac3transcode" help="37024">
         </setting>
       </group>
