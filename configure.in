@@ -2712,6 +2712,8 @@ AC_SUBST(USE_PVR_ADDONS)
 AC_SUBST(GNUTLS_ALL_LIBS)
 AC_SUBST(HOGWEED_ALL_LIBS)
 AC_SUBST(VORBISENC_ALL_LIBS)
+AC_SUBST(USE_EXYNOS4)
+AC_SUBST(USE_EXYNOS5)
 
 # pushd and popd are not available in other shells besides bash, so implement
 # our own pushd/popd functions

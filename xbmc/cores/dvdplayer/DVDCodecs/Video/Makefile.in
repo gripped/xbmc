@@ -5,9 +5,7 @@ SRCS  = DVDVideoCodec.cpp
 SRCS += DVDVideoCodecFFmpeg.cpp
 SRCS += DVDVideoCodecLibMpeg2.cpp
 SRCS += DVDVideoPPFFmpeg.cpp
-ifeq (@USE_HYBRIS@,1)
-SRCS += DVDVideoCodecHybris.cpp
-endif
+
 ifeq (@USE_VDPAU@,1)
 SRCS += VDPAU.cpp
 endif
@@ -41,11 +39,11 @@ ifeq (@USE_LIBSTAGEFRIGHT@,1)
 SRCS += DVDVideoCodecStageFright.cpp
 endif
 
-
+ifeq (@USE_EXYNOS4@,1)
 SRCS += DVDVideoCodecExynos4.cpp
-
+endif
 ifeq (@USE_EXYNOS5@,1)
-SRCS += DVDVideoCodecExynos5.cpp DVDVideoCodecExynos.cpp 
+SRCS += DVDVideoCodecExynos5.cpp
 SRCS += deinterleave_chroma.neon.S
 endif
 
