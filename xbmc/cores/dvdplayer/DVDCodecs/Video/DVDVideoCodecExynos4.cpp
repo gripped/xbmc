@@ -166,7 +166,7 @@ bool CDVDVideoCodecExynos4::SetupFIMC() {
     return false;
   }
   CLog::Log(LOGDEBUG, "%s::%s - FIMC CAPTURE S_FMT %dx%d", CLASSNAME, __func__, fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height);
-  m_iConvertedWidth = fmt.fmt.pix_mp.width;RESOLUTION_INFO res_info =  CDisplaySettings::Get().GetResolutionInfo(g_graphicsContext.GetVideoResolution());
+  m_iConvertedWidth = fmt.fmt.pix_mp.width;
   m_iConvertedHeight = fmt.fmt.pix_mp.height;
 
   // Setup FIMC CAPTURE crop
