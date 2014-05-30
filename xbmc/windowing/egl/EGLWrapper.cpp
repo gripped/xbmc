@@ -26,7 +26,6 @@
 #include "EGLNativeTypeAndroid.h"
 #include "EGLNativeTypeAmlogic.h"
 #include "EGLNativeTypeRaspberryPI.h"
-#include "EGLNativeTypeOdroid.h"
 #include "EGLNativeTypeHybris.h"
 #include "EGLWrapper.h"
 
@@ -86,21 +85,6 @@ bool CEGLWrapper::Initialize(const std::string &implementation)
     }
   }
 
-  #if defined(HAVE_EXYNOS4)
-  if (!ret)
-  {
-    delete nativeGuess;
-    nativeGuess = new CEGLNativeTypeOdroid;
-    if (nativeGuess->CheckCompatibility())
-    {
-      if(implementation == nativeGuess->GetNativeName() || implementation == "auto")
-      {
-        m_nativeTypes = nativeGuess;
-        ret = true;
-      }
-    }
-  }
-  #endif
 
   #if defined(TARGET_HYBRIS)
   if (!ret)                                                                                                                                                                                   
