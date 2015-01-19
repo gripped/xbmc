@@ -558,7 +558,7 @@ AC_ARG_ENABLE([gtest],
 
 AC_ARG_ENABLE([codec],
   [AS_HELP_STRING([--enable-codec],
-  [enable additional codecs from a list of comma separated names, (default is none, choices are amcodec, libstagefright and imxvpu)])],
+  [enable additional codecs from a list of comma separated names, (default is none, choices are amcodec, libstagefright, mfc and imxvpu)])],
   [add_codecs=$enableval],
   [add_codecs=no])
 
@@ -676,11 +676,9 @@ case $host in
   arm*-*-linux-gnu*|arm*-*-linux-uclibc*)
      ARCH="arm"
      use_arch="arm"
-     use_joystick=no
      use_neon=yes
      use_gles=yes
      use_gl=no
-     use_sdl=no
      use_wayland=no
      USE_STATIC_FFMPEG=1
      ;;
@@ -1932,6 +1930,9 @@ for codecs in `echo $add_codecs | sed 's/,/ /g'`; do
         ;;
     *libstagefright*)
         XB_ADD_CODEC([LIBSTAGEFRIGHT], [libstagefright], [$codecs])
+        ;;
+    *mfc*)
+        XB_ADD_CODEC([MFC], [mfc], [$codecs])
         ;;
     *imxvpu*)
       AC_CHECK_HEADER([imx-mm/vpu/vpu_wrapper.h],, AC_MSG_ERROR($missing_headers))
