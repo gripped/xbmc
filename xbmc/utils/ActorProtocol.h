@@ -21,7 +21,6 @@
 #pragma once
 
 #include "threads/Thread.h"
-#include "utils/log.h"
 #include <queue>
 #include "memory.h"
 
@@ -69,6 +68,8 @@ public:
   bool ReceiveOutMessage(Message **msg);
   bool ReceiveInMessage(Message **msg);
   void Purge();
+  void PurgeIn(int signal);
+  void PurgeOut(int signal);
   void DeferIn(bool value) {inDefered = value;};
   void DeferOut(bool value) {outDefered = value;};
   void Lock() {criticalSection.lock();};

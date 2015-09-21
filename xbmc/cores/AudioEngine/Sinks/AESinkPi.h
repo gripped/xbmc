@@ -40,10 +40,9 @@ public:
   virtual void Deinitialize();
   virtual bool IsCompatible(const AEAudioFormat &format, const std::string &device);
 
-  virtual double       GetDelay        ();
-  virtual double       GetCacheTime    ();
+  virtual void         GetDelay        (AEDelayStatus& status);
   virtual double       GetCacheTotal   ();
-  virtual unsigned int AddPackets      (uint8_t *data, unsigned int frames, bool hasAudio, bool blocking = false);
+  virtual unsigned int AddPackets      (uint8_t **data, unsigned int frames, unsigned int offset);
   virtual void         Drain           ();
 
   static void          EnumerateDevicesEx(AEDeviceInfoList &list, bool force = false);
@@ -53,14 +52,19 @@ private:
   std::string          m_initDevice;
   AEAudioFormat        m_initFormat;
   AEAudioFormat        m_format;
-  unsigned int         m_sinkbuffer_size;  ///< total size of the buffer
   double               m_sinkbuffer_sec_per_byte;
   static CAEDeviceInfo m_info;
   bool                 m_Initialized;
   uint32_t             m_submitted;
   OMX_AUDIO_PARAM_PCMMODETYPE m_pcm_input;
+  COMXCoreComponent   *m_omx_output;
+  COMXCoreComponent    m_omx_splitter;
   COMXCoreComponent    m_omx_render;
+  COMXCoreComponent    m_omx_render_slave;
   bool                 m_passthrough;
+  COMXCoreTunel        m_omx_tunnel_splitter;
+  COMXCoreTunel        m_omx_tunnel_splitter_slave;
+  enum { AESINKPI_UNKNOWN, AESINKPI_HDMI, AESINKPI_ANALOGUE, AESINKPI_BOTH } m_output;
 };
 
 #endif

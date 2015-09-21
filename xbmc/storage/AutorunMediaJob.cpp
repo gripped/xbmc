@@ -21,14 +21,14 @@
 #include "Application.h"
 #include "interfaces/Builtins.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/LocalizeStrings.h"
 #include "dialogs/GUIDialogSelect.h"
-#include "guilib/Key.h"
 #include "utils/StringUtils.h"
 
-CAutorunMediaJob::CAutorunMediaJob(const CStdString &label, const CStdString &path)
+CAutorunMediaJob::CAutorunMediaJob(const std::string &label, const std::string &path):
+  m_path(path),
+  m_label(label)
 {
-  m_label = label;
-  m_path  = path;
 }
 
 bool CAutorunMediaJob::DoWork()
@@ -42,19 +42,19 @@ bool CAutorunMediaJob::DoWork()
   if (m_label.size() > 0)
     pDialog->SetHeading(m_label);
   else
-    pDialog->SetHeading("New media detected");
+    pDialog->SetHeading(g_localizeStrings.Get(21331));
 
-  pDialog->Add("Browse videos");
-  pDialog->Add("Browse music");
-  pDialog->Add("Browse pictures");
-  pDialog->Add("Browse files");
+  pDialog->Add(g_localizeStrings.Get(21332));
+  pDialog->Add(g_localizeStrings.Get(21333));
+  pDialog->Add(g_localizeStrings.Get(21334));
+  pDialog->Add(g_localizeStrings.Get(21335));
 
   pDialog->DoModal();
 
   int selection = pDialog->GetSelectedLabel();
   if (selection >= 0)
   {
-    CStdString strAction = StringUtils::Format("ActivateWindow(%s, %s)", GetWindowString(selection), m_path.c_str());
+    std::string strAction = StringUtils::Format("ActivateWindow(%s, %s)", GetWindowString(selection), m_path.c_str());
     CBuiltins::Execute(strAction);
   }
 

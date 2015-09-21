@@ -24,6 +24,9 @@
 #include "settings/lib/Setting.h"
 #include "settings/Settings.h"
 #include "utils/StringUtils.h"
+#if HAS_GLES
+#include "guilib/GUIFontTTFGL.h"
+#endif
 
 using namespace std;
 
@@ -51,6 +54,14 @@ bool CWinSystemBase::InitWindowSystem()
   UpdateResolutions();
   CDisplaySettings::Get().ApplyCalibrations();
   return true;
+}
+
+bool CWinSystemBase::DestroyWindowSystem()
+{
+#if HAS_GLES
+  CGUIFontTTFGL::DestroyStaticVertexBuffers();
+#endif
+  return false;
 }
 
 void CWinSystemBase::UpdateDesktopResolution(RESOLUTION_INFO& newRes, int screen, int width, int height, float refreshRate, uint32_t dwFlags)
@@ -129,7 +140,8 @@ static void AddResolution(vector<RESOLUTION_WHR> &resolutions, unsigned int addi
   int flags  = resInfo.dwFlags & D3DPRESENTFLAG_MODEMASK;
   float refreshrate = resInfo.fRefreshRate;
 
-  for (unsigned int idx = 0; idx < resolutions.size(); idx++)
+  // don't touch RES_DESKTOP
+  for (unsigned int idx = 1; idx < resolutions.size(); idx++)
     if (   resolutions[idx].width == width
         && resolutions[idx].height == height
         &&(resolutions[idx].flags & D3DPRESENTFLAG_MODEMASK) == flags)
@@ -137,8 +149,7 @@ static void AddResolution(vector<RESOLUTION_WHR> &resolutions, unsigned int addi
       // check if the refresh rate of this resolution is better suited than
       // the refresh rate of the resolution with the same width/height/interlaced
       // property and if so replace it
-      // don't touch RES_DESKTOP
-      if (idx != 0 && bestRefreshrate > 0.0 && refreshrate == bestRefreshrate)
+      if (bestRefreshrate > 0.0 && refreshrate == bestRefreshrate)
         resolutions[idx].ResInfo_Index = addindex;
 
       // no need to add the resolution again

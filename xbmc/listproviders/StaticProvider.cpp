@@ -64,9 +64,9 @@ CStaticListProvider::~CStaticListProvider()
 {
 }
 
-bool CStaticListProvider::Update(bool refresh)
+bool CStaticListProvider::Update(bool forceRefresh)
 {
-  bool changed = refresh;
+  bool changed = forceRefresh;
   if (!m_updateTime)
     m_updateTime = CTimeUtils::GetFrameTime();
   else if (CTimeUtils::GetFrameTime() - m_updateTime > 1000)
@@ -121,6 +121,6 @@ bool CStaticListProvider::AlwaysFocusDefaultItem() const
 
 bool CStaticListProvider::OnClick(const CGUIListItemPtr &item)
 {
-  CGUIStaticItemPtr staticItem = boost::static_pointer_cast<CGUIStaticItem>(item);
+  CGUIStaticItemPtr staticItem = std::static_pointer_cast<CGUIStaticItem>(item);
   return staticItem->GetClickActions().ExecuteActions(0, m_parentID);
 }

@@ -23,7 +23,6 @@
 #include "utils/Variant.h"
 #include "FileItem.h"
 #include "settings/AdvancedSettings.h"
-#include "utils/StringUtils.h"
 
 using namespace std;
 using namespace MUSIC_INFO;
@@ -36,23 +35,43 @@ CSong::CSong(CFileItem& item)
   strTitle = tag.GetTitle();
   genre = tag.GetGenre();
   artist = tag.GetArtist();
-  bool hasMusicBrainzArtist = !tag.GetMusicBrainzArtistID().empty();
-  const vector<string>& artists = hasMusicBrainzArtist ? tag.GetMusicBrainzArtistID() : tag.GetArtist();
-  for (vector<string>::const_iterator it = artists.begin(); it != artists.end(); ++it)
-  {
-    CStdString artistName = hasMusicBrainzArtist && !artist.empty() ? artist[0] : *it;
-    CStdString artistId = hasMusicBrainzArtist ? *it : StringUtils::EmptyString;
-    CStdString strJoinPhrase = (it == --artists.end() ? "" : g_advancedSettings.m_musicItemSeparator);
-    CArtistCredit artistCredit(artistName, artistId, strJoinPhrase);
-    artistCredits.push_back(artistCredit);
+  if (!tag.GetMusicBrainzArtistID().empty())
+  { // have musicbrainz artist info, so use it
+    for (size_t i = 0; i < tag.GetMusicBrainzArtistID().size(); i++)
+    {
+      std::string artistId = tag.GetMusicBrainzArtistID()[i];
+      std::string artistName;
+      /*
+       We try and get the corresponding artist name from the album artist tag.
+       We match on the same index, and if that fails just use the first name we have.
+       */
+      if (!artist.empty())
+        artistName = (i < artist.size()) ? artist[i] : artist[0];
+      if (artistName.empty())
+        artistName = artistId;
+      std::string strJoinPhrase = (i == tag.GetMusicBrainzArtistID().size()-1) ? "" : g_advancedSettings.m_musicItemSeparator;
+      CArtistCredit artistCredit(artistName, artistId, strJoinPhrase);
+      artistCredits.push_back(artistCredit);
+    }
+  }
+  else
+  { // no musicbrainz info, so fill in directly
+    for (vector<string>::const_iterator it = tag.GetArtist().begin(); it != tag.GetArtist().end(); ++it)
+    {
+      std::string strJoinPhrase = (it == --tag.GetArtist().end() ? "" : g_advancedSettings.m_musicItemSeparator);
+      CArtistCredit artistCredit(*it, "", strJoinPhrase);
+      artistCredits.push_back(artistCredit);
+    }
   }
   strAlbum = tag.GetAlbum();
   albumArtist = tag.GetAlbumArtist();
   strMusicBrainzTrackID = tag.GetMusicBrainzTrackID();
   strComment = tag.GetComment();
+  strCueSheet = tag.GetCueSheet();
+  strMood = tag.GetMood();
   rating = tag.GetRating();
   iYear = stTime.wYear;
-  iTrack = tag.GetTrackAndDiskNumber();
+  iTrack = tag.GetTrackAndDiscNumber();
   iDuration = tag.GetDuration();
   bCompilation = tag.GetCompilation();
   embeddedArt = tag.GetCoverArtInfo();
@@ -98,6 +117,7 @@ void CSong::Serialize(CVariant& value) const
   value["year"] = iYear;
   value["musicbrainztrackid"] = strMusicBrainzTrackID;
   value["comment"] = strComment;
+  value["mood"] = strMood;
   value["rating"] = rating;
   value["timesplayed"] = iTimesPlayed;
   value["lastplayed"] = lastPlayed.IsValid() ? lastPlayed.GetAsDBDateTime() : "";
@@ -116,6 +136,7 @@ void CSong::Clear()
   strThumb.clear();
   strMusicBrainzTrackID.clear();
   strComment.clear();
+  strMood.clear();
   rating = '0';
   iTrack = 0;
   iDuration = 0;

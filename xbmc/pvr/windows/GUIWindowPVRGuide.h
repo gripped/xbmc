@@ -20,50 +20,34 @@
  *
  */
 
-#include "GUIWindowPVRCommon.h"
+#include "GUIWindowPVRBase.h"
 #include "epg/GUIEPGGridContainer.h"
-#include "threads/CriticalSection.h"
-#include "utils/Observer.h"
-#include "../channels/PVRChannelGroup.h"
+#include "threads/SystemClock.h"
 
 class CSetting;
 
 namespace PVR
 {
-  enum EpgGuideView
+  class CGUIWindowPVRGuide : public CGUIWindowPVRBase
   {
-    GUIDE_VIEW_CHANNEL  = 0,
-    GUIDE_VIEW_NOW,
-    GUIDE_VIEW_NEXT,
-    GUIDE_VIEW_TIMELINE
-  };
-
-  class CGUIWindowPVR;
-
-  class CGUIWindowPVRGuide : public CGUIWindowPVRCommon, public Observer
-  {
-    friend class CGUIWindowPVR;
-
   public:
-    CGUIWindowPVRGuide(CGUIWindowPVR *parent);
+    CGUIWindowPVRGuide(bool bRadio);
     virtual ~CGUIWindowPVRGuide(void);
 
-    void GetContextButtons(int itemNumber, CContextButtons &buttons) const;
+    virtual void OnInitWindow();
+    bool OnMessage(CGUIMessage& message);
+    bool OnAction(const CAction &action);
+    void GetContextButtons(int itemNumber, CContextButtons &buttons);
     bool OnContextButton(int itemNumber, CONTEXT_BUTTON button);
-    void UpdateData(bool bUpdateSelectedFile = true);
-    void Notify(const Observable &obs, const ObservableMessage msg);
-    void SetInvalid(void) { UpdateData(); }
-    void UnregisterObservers(void);
     void ResetObservers(void);
-    
-    static void SettingOptionsEpgGuideViewFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current);
+    void UnregisterObservers(void);
+
+  protected:
+    void UpdateSelectedItemPath();
+    virtual bool GetDirectory(const std::string &strDirectory, CFileItemList &items);
 
   private:
     bool SelectPlayingFile(void);
-    bool IsSelectedButton(CGUIMessage &message) const;
-    bool IsSelectedList(CGUIMessage &message) const;
-    bool OnClickButton(CGUIMessage &message);
-    bool OnClickList(CGUIMessage &message);
 
     bool OnContextButtonBegin(CFileItem *item, CONTEXT_BUTTON button);
     bool OnContextButtonEnd(CFileItem *item, CONTEXT_BUTTON button);
@@ -73,14 +57,16 @@ namespace PVR
     bool OnContextButtonStartRecord(CFileItem *item, CONTEXT_BUTTON button);
     bool OnContextButtonStopRecord(CFileItem *item, CONTEXT_BUTTON button);
 
-    void UpdateButtons(void);
-    void UpdateViewChannel(bool bUpdateSelectedFile);
-    void UpdateViewNow(bool bUpdateSelectedFile);
-    void UpdateViewNext(bool bUpdateSelectedFile);
-    void UpdateViewTimeline(bool bUpdateSelectedFile);
+    void GetViewChannelItems(CFileItemList &items);
+    void GetViewNowItems(CFileItemList &items);
+    void GetViewNextItems(CFileItemList &items);
+    void GetViewTimelineItems(CFileItemList &items);
 
-    int               m_iGuideView;
-    CFileItemList    *m_cachedTimeline;
+    CFileItemList      *m_cachedTimeline;
     CPVRChannelGroupPtr m_cachedChannelGroup;
+
+    bool m_bUpdateRequired;
+
+    XbmcThreads::EndTime m_nextUpdateTimeout;
   };
 }

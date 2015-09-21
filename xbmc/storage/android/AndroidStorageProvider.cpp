@@ -18,15 +18,40 @@
  *
  */
 
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <map>
+
 #include "AndroidStorageProvider.h"
 #include "android/activity/XBMCApp.h"
 #include "guilib/LocalizeStrings.h"
 #include "filesystem/File.h"
+#include "filesystem/Directory.h"
 
+#include "Util.h"
 #include "utils/log.h"
 #include "utils/RegExp.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+
+static const char * typeWL[] = { "vfat", "exfat", "sdcardfs", "fuse", "ntfs", "fat32", "ext3", "ext4", "esdfs" };
+static const char * mountWL[] = { "/mnt", "/Removable", "/storage" };
+static const char * mountBL[] = {
+  "/mnt/secure",
+  "/mnt/shell",
+  "/mnt/asec",
+  "/mnt/obb",
+  "/mnt/media_rw/extSdCard",
+  "/mnt/media_rw/sdcard",
+  "/mnt/media_rw/usbdisk",
+  "/storage/emulated"
+};
+static const char * deviceWL[] = {
+  "/dev/block/vold",
+  "/dev/fuse",
+  "/mnt/media_rw"
+};
 
 CAndroidStorageProvider::CAndroidStorageProvider()
 {
@@ -78,7 +103,7 @@ void CAndroidStorageProvider::GetLocalDrives(VECSOURCES &localDrives)
 
   // external directory
   std::string path;
-  if (CXBMCApp::GetExternalStorage(path) && !path.empty()  && XFILE::CFile::Exists(path))
+  if (CXBMCApp::GetExternalStorage(path) && !path.empty()  && XFILE::CDirectory::Exists(path))
   {
     share.strPath = path;
     share.strName = g_localizeStrings.Get(21456);
@@ -95,59 +120,117 @@ void CAndroidStorageProvider::GetLocalDrives(VECSOURCES &localDrives)
 void CAndroidStorageProvider::GetRemovableDrives(VECSOURCES &removableDrives)
 {
   // mounted usb disks
-  std::vector<CStdString> result;
-  CRegExp reMount;
-  reMount.RegComp("^(.+?)\\s+(.+?)\\s+(.+?)\\s");
-  char line[1024];
+  char*                               buf     = NULL;
+  FILE*                               pipe;
+  CRegExp                             reMount;
+  reMount.RegComp("^(.+?)\\s+(.+?)\\s+(.+?)\\s+(.+?)\\s");
 
-  FILE* pipe = fopen("/proc/mounts", "r");
-
-  if (pipe)
+  /* /proc/mounts is only guaranteed atomic for the current read
+   * operation, so we need to read it all at once.
+   */
+  if ((pipe = fopen("/proc/mounts", "r")))
   {
-    while (fgets(line, sizeof(line) - 1, pipe))
+    char*   new_buf;
+    size_t  buf_len = 4096;
+
+    while ((new_buf = (char*)realloc(buf, buf_len * sizeof(char))))
+    {
+      size_t nread;
+
+      buf   = new_buf;
+      nread = fread(buf, sizeof(char), buf_len, pipe);
+
+      if (nread == buf_len)
+      {
+        rewind(pipe);
+        buf_len *= 2;
+      }
+      else
+      {
+        buf[nread] = '\0';
+        if (!feof(pipe))
+          new_buf = NULL;
+        break;
+      }
+    }
+
+    if (!new_buf)
+    {
+      free(buf);
+      buf = NULL;
+    }
+    fclose(pipe);
+  }
+  else
+    CLog::Log(LOGERROR, "Cannot read mount points");
+
+  if (buf)
+  {
+    char* line;
+    char* saveptr = NULL;
+
+    line = strtok_r(buf, "\n", &saveptr);
+
+    while (line)
     {
       if (reMount.RegFind(line) != -1)
       {
-        bool accepted = false;
+        std::string deviceStr   = reMount.GetReplaceString("\\1");
         std::string mountStr = reMount.GetReplaceString("\\2");
         std::string fsStr    = reMount.GetReplaceString("\\3");
-        const char* mount = mountStr.c_str();
-        const char* fs    = fsStr.c_str();
+        std::string optStr    = reMount.GetReplaceString("\\4");
 
-        // Here we choose which filesystems are approved
-        if (strcmp(fs, "fuseblk") == 0 || strcmp(fs, "vfat") == 0
-            || strcmp(fs, "ext2") == 0 || strcmp(fs, "ext3") == 0 || strcmp(fs, "ext4") == 0
-            || strcmp(fs, "reiserfs") == 0 || strcmp(fs, "xfs") == 0
-            || strcmp(fs, "ntfs-3g") == 0 || strcmp(fs, "iso9660") == 0
-            || strcmp(fs, "exfat") == 0
-            || strcmp(fs, "fusefs") == 0 || strcmp(fs, "hfs") == 0)
-          accepted = true;
+        // Blacklist
+        bool bl_ok = true;
 
-        // Ignore everything but usb
-        if (!StringUtils::StartsWith(mountStr, "/mnt/usb"))
-          accepted = false;
+        // Reject unreadable
+        if (!XFILE::CDirectory::Exists(mountStr))
+          bl_ok = false;
 
-        if(accepted)
-          result.push_back(mount);
+        // What mount points are rejected
+        for (unsigned int i=0; i < ARRAY_SIZE(mountBL); ++i)
+          if (StringUtils::StartsWithNoCase(mountStr, mountBL[i]))
+            bl_ok = false;
+
+        if (bl_ok)
+        {
+          // What filesystems are accepted
+          bool fsok = false;
+          for (unsigned int i=0; i < ARRAY_SIZE(typeWL); ++i)
+            if (StringUtils::StartsWithNoCase(fsStr, typeWL[i]))
+              continue;
+
+          // What devices are accepted
+          bool devok = false;
+          for (unsigned int i=0; i < ARRAY_SIZE(deviceWL); ++i)
+            if (StringUtils::StartsWithNoCase(deviceStr, deviceWL[i]))
+              devok = true;
+
+          // What mount points are accepted
+          bool mountok = false;
+          for (unsigned int i=0; i < ARRAY_SIZE(mountWL); ++i)
+            if (StringUtils::StartsWithNoCase(mountStr, mountWL[i]))
+              mountok = true;
+
+          if(devok && (fsok || mountok))
+          {
+            CMediaSource share;
+            share.strPath = unescape(mountStr);
+            share.strName = URIUtils::GetFileName(mountStr);
+            share.m_ignore = true;
+            removableDrives.push_back(share);
+          }
+        }
       }
+      line = strtok_r(NULL, "\n", &saveptr);
     }
-    fclose(pipe);
-  } else
-    CLog::Log(LOGERROR, "Cannot read mount points");
-
-  for (unsigned int i = 0; i < result.size(); i++)
-  {
-    CMediaSource share;
-    share.strPath = unescape(result[i]);
-    share.strName = URIUtils::GetFileName(share.strPath);
-    share.m_ignore = true;
-    removableDrives.push_back(share);
+    free(buf);
   }
 }
 
-std::vector<CStdString> CAndroidStorageProvider::GetDiskUsage()
+std::vector<std::string> CAndroidStorageProvider::GetDiskUsage()
 {
-  std::vector<CStdString> result;
+  std::vector<std::string> result;
 
   std::string usage;
   // add header
@@ -179,7 +262,7 @@ std::vector<CStdString> CAndroidStorageProvider::GetDiskUsage()
   return result;
 }
 
-bool CAndroidStorageProvider::Eject(CStdString mountpath)
+bool CAndroidStorageProvider::Eject(const std::string& mountpath)
 {
   return false;
 }

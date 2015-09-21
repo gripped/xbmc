@@ -25,6 +25,12 @@
 #include "threads/CriticalSection.h"
 #include "utils/JobManager.h"
 
+enum SUBTITLE_STORAGEMODE
+{
+  SUBTITLE_STORAGEMODE_MOVIEPATH = 0,
+  SUBTITLE_STORAGEMODE_CUSTOMPATH
+};
+
 class CFileItem;
 class CFileItemList;
 
@@ -62,7 +68,8 @@ protected:
   CFileItemList* m_serviceItems;
   std::string    m_currentService;
   std::string    m_status;
-  CStdString     m_strManualSearch;
+  std::string     m_strManualSearch;
   bool           m_pausedOnRun;
   bool           m_updateSubsList; ///< true if we need to update our subs list
+  std::string     m_LastAutoDownloaded; ///< Last video file path which automatically downloaded subtitle
 };

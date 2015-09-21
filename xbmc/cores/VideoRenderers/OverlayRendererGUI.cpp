@@ -18,8 +18,6 @@
  *
  */
 
-#include "system.h"
-
 #include "OverlayRendererGUI.h"
 #include "settings/Settings.h"
 
@@ -32,8 +30,6 @@
 #include "guilib/GUIFontManager.h"
 #include "guilib/GUIFont.h"
 #include "cores/dvdplayer/DVDCodecs/Overlay/DVDOverlayText.h"
-#include "cores/VideoRenderers/RenderManager.h"
-#include "cores/VideoRenderers/OverlayRendererUtil.h"
 
 using namespace OVERLAY;
 
@@ -87,7 +83,7 @@ COverlayText::COverlayText(CDVDOverlayText * src)
     if (e->IsElementType(CDVDOverlayText::ELEMENT_TYPE_TEXT))
     {
       CDVDOverlayText::CElementText* t = (CDVDOverlayText::CElementText*)e;
-      m_text += t->m_text;
+      m_text += t->GetText();
       m_text += "\n";
     }
     e = e->pNext;
@@ -140,11 +136,21 @@ COverlayText::COverlayText(CDVDOverlayText * src)
   }
   m_width  = 0;
   m_height = 0;
+
+  m_type = TYPE_GUITEXT;
 }
 
 COverlayText::~COverlayText()
 {
   delete m_layout;
+}
+
+void COverlayText::PrepareRender()
+{
+  RESOLUTION_INFO res = g_graphicsContext.GetResInfo();
+  float width_max = (float)res.Overscan.right - res.Overscan.left;
+  m_layout->Update(m_text, width_max * 0.9f, false, true); // true to force LTR reading order (most Hebrew subs are this format)
+  m_layout->GetTextExtent(m_width, m_height);
 }
 
 void COverlayText::Render(OVERLAY::SRenderState &state)
@@ -166,24 +172,22 @@ void COverlayText::Render(OVERLAY::SRenderState &state)
   mat.m[0][3] = rd.x1;
   mat.m[1][3] = rd.y1;
 
-  float x = state.x + GetStereoscopicDepth(), y = state.y;
+  float x = state.x;
+  float y = state.y;
   mat.InverseTransformPosition(x, y);
 
   g_graphicsContext.SetTransform(mat, 1.0f, 1.0f);
 
   float width_max = (float) res.Overscan.right - res.Overscan.left;
-  float width, height;
-  m_layout->Update(m_text, width_max * 0.9f, false, true); // true to force LTR reading order (most Hebrew subs are this format)
-  m_layout->GetTextExtent(width, height);
 
   if (m_subalign == SUBTITLE_ALIGN_MANUAL
-  ||  m_subalign == SUBTITLE_ALIGN_TOP_OUTSIDE
+  ||  m_subalign == SUBTITLE_ALIGN_BOTTOM_OUTSIDE
   ||  m_subalign == SUBTITLE_ALIGN_BOTTOM_INSIDE)
-    y -= height;
+    y -= m_height;
 
   // clamp inside screen
   y = std::max(y, (float) res.Overscan.top);
-  y = std::min(y, res.Overscan.bottom - height);
+  y = std::min(y, res.Overscan.bottom - m_height);
 
   m_layout->RenderOutline(x, y, 0, 0xFF000000, XBFONT_CENTER_X, width_max);
   g_graphicsContext.RemoveTransform();

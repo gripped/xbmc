@@ -24,22 +24,27 @@
 
 #include "windowing/WinSystem.h"
 #include "threads/CriticalSection.h"
+#include "threads/Timer.h"
 
 typedef struct SDL_Surface SDL_Surface;
 
 class IDispResource;
 class CWinEventsOSX;
 
-class CWinSystemOSX : public CWinSystemBase
+class CWinSystemOSX : public CWinSystemBase, public ITimerCallback
 {
 public:
+
   CWinSystemOSX();
   virtual ~CWinSystemOSX();
+
+  // ITimerCallback interface
+  virtual void OnTimeout();
 
   // CWinSystemBase
   virtual bool InitWindowSystem();
   virtual bool DestroyWindowSystem();
-  virtual bool CreateNewWindow(const CStdString& name, bool fullScreen, RESOLUTION_INFO& res, PHANDLE_EVENT_FUNC userFunction);
+  virtual bool CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res, PHANDLE_EVENT_FUNC userFunction);
   virtual bool DestroyWindow();
   virtual bool ResizeWindow(int newWidth, int newHeight, int newLeft, int newTop);
   bool         ResizeWindowInternal(int newWidth, int newHeight, int newLeft, int newTop, void *additional);
@@ -66,16 +71,22 @@ public:
   
   virtual int GetNumScreens();
   virtual int GetCurrentScreen();
+  virtual double GetCurrentRefreshrate() { return m_refreshRate; }
   
   void        WindowChangedScreen();
 
-  void CheckDisplayChanging(u_int32_t flags);
+  void        AnnounceOnLostDevice();
+  void        AnnounceOnResetDevice();
+  void        StartLostDeviceTimer();
+  void        StopLostDeviceTimer();
   
   void* GetCGLContextObj();
+  void* GetNSOpenGLContext();
 
   std::string GetClipboardText(void);
 
 protected:
+  void  HandlePossibleRefreshrateChange();
   void* CreateWindowedContext(void* shareCtx);
   void* CreateFullScreenContext(int screen_index, void* shareCtx);
   void  GetScreenResolution(int* w, int* h, double* fps, int screenIdx);
@@ -101,9 +112,11 @@ protected:
   void                        *m_windowDidMove;
   void                        *m_windowDidReSize;
   void                        *m_windowChangedScreen;
+  double                       m_refreshRate;
 
   CCriticalSection             m_resourceSection;
   std::vector<IDispResource*>  m_resources;
+  CTimer                       m_lostDeviceTimer;
 };
 
 #endif

@@ -20,6 +20,7 @@
 
 #include "FavouritesDirectory.h"
 #include "File.h"
+#include "Directory.h"
 #include "Util.h"
 #include "profiles/ProfilesManager.h"
 #include "FileItem.h"
@@ -29,40 +30,37 @@
 #include "utils/URIUtils.h"
 #include "settings/AdvancedSettings.h"
 #include "video/VideoInfoTag.h"
+#include "music/tags/MusicInfoTag.h"
 #include "URL.h"
 
 namespace XFILE
 {
 
 
-bool CFavouritesDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
+bool CFavouritesDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 {
   items.Clear();
-  CURL url(strPath);
-
-  if (url.GetProtocol() == "favourites")
+  if (url.IsProtocol("favourites"))
   {
     return Load(items); //load the default favourite files
   }
-  return LoadFavourites(strPath, items); //directly load the given file
+  return LoadFavourites(url.Get(), items); //directly load the given file
 }
 
-bool CFavouritesDirectory::Exists(const char* strPath)
+bool CFavouritesDirectory::Exists(const CURL& url)
 {
-  CURL url(strPath);
-
-  if (url.GetProtocol() == "favourites")
+  if (url.IsProtocol("favourites"))
   {
     return XFILE::CFile::Exists("special://xbmc/system/favourites.xml") 
         || XFILE::CFile::Exists(URIUtils::AddFileToFolder(CProfilesManager::Get().GetProfileUserDataFolder(), "favourites.xml"));
   }
-  return XFILE::CFile::Exists(strPath); //directly load the given file
+  return XFILE::CDirectory::Exists(url); //directly load the given file
 }
 
 bool CFavouritesDirectory::Load(CFileItemList &items)
 {
   items.Clear();
-  CStdString favourites;
+  std::string favourites;
 
   favourites = "special://xbmc/system/favourites.xml";
   if(XFILE::CFile::Exists(favourites))
@@ -78,7 +76,7 @@ bool CFavouritesDirectory::Load(CFileItemList &items)
   return true;
 }
 
-bool CFavouritesDirectory::LoadFavourites(const CStdString& strPath, CFileItemList& items)
+bool CFavouritesDirectory::LoadFavourites(const std::string& strPath, CFileItemList& items)
 {
   CXBMCTinyXML doc;
   if (!doc.LoadFile(strPath))
@@ -119,7 +117,7 @@ bool CFavouritesDirectory::LoadFavourites(const CStdString& strPath, CFileItemLi
 
 bool CFavouritesDirectory::Save(const CFileItemList &items)
 {
-  CStdString favourites;
+  std::string favourites;
   CXBMCTinyXML doc;
   TiXmlElement xmlRootElement("favourites");
   TiXmlNode *rootNode = doc.InsertEndChild(xmlRootElement);
@@ -149,7 +147,7 @@ bool CFavouritesDirectory::AddOrRemove(CFileItem *item, int contextWindow)
   CFileItemList items;
   Load(items);
 
-  CStdString executePath(GetExecutePath(*item, contextWindow));
+  std::string executePath(GetExecutePath(*item, contextWindow));
 
   CFileItemPtr match = items.Get(executePath);
   if (match)
@@ -178,14 +176,14 @@ bool CFavouritesDirectory::IsFavourite(CFileItem *item, int contextWindow)
   return items.Contains(GetExecutePath(*item, contextWindow));
 }
 
-CStdString CFavouritesDirectory::GetExecutePath(const CFileItem &item, int contextWindow)
+std::string CFavouritesDirectory::GetExecutePath(const CFileItem &item, int contextWindow)
 {
   return GetExecutePath(item, StringUtils::Format("%i", contextWindow));
 }
 
-CStdString CFavouritesDirectory::GetExecutePath(const CFileItem &item, const std::string &contextWindow)
+std::string CFavouritesDirectory::GetExecutePath(const CFileItem &item, const std::string &contextWindow)
 {
-  CStdString execute;
+  std::string execute;
   if (item.m_bIsFolder && (g_advancedSettings.m_playlistAsFolders ||
                             !(item.IsSmartPlayList() || item.IsPlayList())))
   {
@@ -201,6 +199,10 @@ CStdString CFavouritesDirectory::GetExecutePath(const CFileItem &item, const std
   {
     if (item.IsVideoDb() && item.HasVideoInfoTag())
       execute = StringUtils::Format("PlayMedia(%s)", StringUtils::Paramify(item.GetVideoInfoTag()->m_strFileNameAndPath).c_str());
+    else if (item.IsMusicDb() && item.HasMusicInfoTag())
+      execute = StringUtils::Format("PlayMedia(%s)", StringUtils::Paramify(item.GetMusicInfoTag()->GetURL()).c_str());
+    else if (item.IsPicture())
+      execute = StringUtils::Format("ShowPicture(%s)", StringUtils::Paramify(item.GetPath()).c_str());
     else
       execute = StringUtils::Format("PlayMedia(%s)", StringUtils::Paramify(item.GetPath()).c_str());
   }

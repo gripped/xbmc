@@ -227,6 +227,7 @@ KeyMap keyMap[] = {
   { KEY_POWER         , XBMCK_POWER       },
   { KEY_KPEQUAL       , XBMCK_KP_EQUALS   },
   { KEY_PAUSE         , XBMCK_PAUSE       },
+  { KEY_PAUSECD       , XBMCK_PAUSE       },
   { KEY_LEFTMETA      , XBMCK_LMETA       },
   { KEY_RIGHTMETA     , XBMCK_RMETA       },
   { KEY_COMPOSE       , XBMCK_LSUPER      },
@@ -246,14 +247,23 @@ KeyMap keyMap[] = {
   { KEY_SCROLLUP      , XBMCK_PAGEUP      },
   { KEY_SCROLLDOWN    , XBMCK_PAGEDOWN    },
   { KEY_PLAY          , XBMCK_PLAY        },
+  { KEY_PLAYCD        , XBMCK_PLAY        },
   { KEY_FASTFORWARD   , XBMCK_FASTFORWARD },
   { KEY_PRINT         , XBMCK_PRINT       },
   { KEY_QUESTION      , XBMCK_HELP        },
+  { KEY_BACK          , XBMCK_BACKSPACE   },
+  { KEY_SELECT        , XBMCK_RETURN      },
+  { KEY_RED           , XBMCK_TAB         },
+  { KEY_GREEN         , XBMCK_z           },
+  { KEY_YELLOW        , XBMCK_i           },
+  { KEY_BLUE          , XBMCK_c           },
   // The Little Black Box Remote Additions
   { 384               , XBMCK_LEFT        }, // Red
   { 378               , XBMCK_RIGHT       }, // Green
   { 381               , XBMCK_UP          }, // Yellow
   { 366               , XBMCK_DOWN        }, // Blue
+  // Rii i7 Home button / wetek openelec remote (code 172)
+  { KEY_HOMEPAGE      , XBMCK_HOME        },
 };
 
 typedef enum
@@ -274,12 +284,12 @@ typedef enum
 
 static char remoteStatus = 0xFF; // paired, battery OK
 
-CLinuxInputDevice::CLinuxInputDevice(const std::string fileName, int index)
+CLinuxInputDevice::CLinuxInputDevice(const std::string& fileName, int index):
+  m_fileName(fileName)
 {
   m_fd = -1;
   m_vt_fd = -1;
   m_hasLeds = false;
-  m_fileName = fileName;
   m_ledState[0] = false;
   m_ledState[1] = false;
   m_ledState[2] = false;
@@ -748,7 +758,7 @@ void CLinuxInputDevice::SetupKeyboardAutoRepeat(int fd)
   bool enable = true;
 
 #if defined(HAS_LIBAMCODEC)
-  if (aml_present())
+  if (aml_get_device_type() == AML_DEVICE_TYPE_M1 || aml_get_device_type() == AML_DEVICE_TYPE_M3)
   {
     // ignore the native aml driver named 'key_input',
     //  it is the dedicated power key handler (am_key_input)
@@ -931,9 +941,9 @@ void CLinuxInputDevice::GetInfo(int fd)
   //printf("pref: %d\n", m_devicePreferredId);
 }
 
-char* CLinuxInputDevice::GetDeviceName()
+const std::string& CLinuxInputDevice::GetFileName()
 {
-  return m_deviceName;
+  return m_fileName;
 }
 
 bool CLinuxInputDevice::IsUnplugged()
@@ -944,6 +954,11 @@ bool CLinuxInputDevice::IsUnplugged()
 bool CLinuxInputDevices::CheckDevice(const char *device)
 {
   int fd;
+
+  // Does the device exists?
+  struct stat buffer;
+  if (stat(device, &buffer) != 0)
+    return false;
 
   /* Check if we are able to open the device */
   fd = open(device, O_RDWR);
@@ -1016,7 +1031,7 @@ void CLinuxInputDevices::CheckHotplugged()
 
     for (size_t j = 0; j < m_devices.size(); j++)
     {
-      if (strcmp(m_devices[j]->GetDeviceName(),buf) == 0)
+      if (m_devices[j]->GetFileName().compare(buf) == 0)
       {
         ispresent = true;
         break;

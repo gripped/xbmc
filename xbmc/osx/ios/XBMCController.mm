@@ -31,13 +31,12 @@
 #include "MusicInfoTag.h"
 #include "SpecialProtocol.h"
 #include "PlayList.h"
-#include "AEFactory.h"
 #include "ApplicationMessenger.h"
 #include "Application.h"
 #include "interfaces/AnnouncementManager.h"
 #include "input/touch/generic/GenericTouchActionHandler.h"
 #include "guilib/GUIControl.h"
-#include "guilib/Key.h"
+#include "input/Key.h"
 #include "windowing/WindowingFactory.h"
 #include "video/VideoReferenceClock.h"
 #include "utils/log.h"
@@ -49,6 +48,7 @@
 #include "TextureCache.h"
 #undef id
 #include <math.h>
+#include "osx/DarwinUtils.h"
 
 #ifndef M_PI
 #define M_PI 3.1415926535897932384626433832795028842
@@ -147,11 +147,11 @@ void AnnounceBridge(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, con
     if (!thumb.empty())
     {
       bool needsRecaching;
-      CStdString cachedThumb(CTextureCache::Get().CheckCachedImage(thumb, false, needsRecaching));
+      std::string cachedThumb(CTextureCache::Get().CheckCachedImage(thumb, false, needsRecaching));
       LOG("thumb: %s, %s", thumb.c_str(), cachedThumb.c_str());
       if (!cachedThumb.empty())
       {
-        CStdString thumbRealPath = CSpecialProtocol::TranslatePath(cachedThumb);
+        std::string thumbRealPath = CSpecialProtocol::TranslatePath(cachedThumb);
         [item setValue:[NSString stringWithUTF8String:thumbRealPath.c_str()] forKey:@"thumb"];
       }
     }
@@ -181,7 +181,7 @@ void AnnounceBridge(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, con
     LOG(@"item: %@", item.description);
     [g_xbmcController performSelectorOnMainThread:@selector(onPlay:) withObject:item  waitUntilDone:NO];
   }
-  else if (msg == "OnSpeedChanged")
+  else if (msg == "OnSpeedChanged" || msg == "OnPause")
   {
     NSDictionary *item = [dict valueForKey:@"item"];
     NSDictionary *player = [dict valueForKey:@"player"];
@@ -189,15 +189,11 @@ void AnnounceBridge(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, con
     [item setValue:[NSNumber numberWithDouble:g_application.GetTime()] forKey:@"elapsed"];
     LOG(@"item: %@", item.description);
     [g_xbmcController performSelectorOnMainThread:@selector(OnSpeedChanged:) withObject:item  waitUntilDone:NO];
-  }
-  else if (msg == "OnPause")
-  {
-    CAEFactory::Suspend();
-    [g_xbmcController performSelectorOnMainThread:@selector(onPause:) withObject:[dict valueForKey:@"item"]  waitUntilDone:NO];
+    if (msg == "OnPause")
+      [g_xbmcController performSelectorOnMainThread:@selector(onPause:) withObject:[dict valueForKey:@"item"]  waitUntilDone:NO];
   }
   else if (msg == "OnStop")
   {
-    CAEFactory::Suspend();
     [g_xbmcController performSelectorOnMainThread:@selector(onStop:) withObject:[dict valueForKey:@"item"]  waitUntilDone:NO];
   }
 }
@@ -216,12 +212,12 @@ public:
   {
     if (NULL==g_announceReceiver) {
       g_announceReceiver = new AnnounceReceiver();
-      ANNOUNCEMENT::CAnnouncementManager::AddAnnouncer(g_announceReceiver);
+      ANNOUNCEMENT::CAnnouncementManager::Get().AddAnnouncer(g_announceReceiver);
     }
   }
   static void dealloc()
   {
-    ANNOUNCEMENT::CAnnouncementManager::RemoveAnnouncer(g_announceReceiver);
+    ANNOUNCEMENT::CAnnouncementManager::Get().RemoveAnnouncer(g_announceReceiver);
     delete g_announceReceiver;
   }
 private:
@@ -331,25 +327,30 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
 //--------------------------------------------------------------
 - (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration
 {
-  orientation = toInterfaceOrientation;
-  CGRect srect = [IOSScreenManager getLandscapeResolution: [m_glView getCurrentScreen]];
-  CGRect rect = srect;;
-  
-
-  switch(toInterfaceOrientation)
+#if __IPHONE_8_0
+  if (CDarwinUtils::GetIOSVersion() < 8.0)
+#endif
   {
-    case UIInterfaceOrientationPortrait:  
-    case UIInterfaceOrientationPortraitUpsideDown:
-      if(![[IOSScreenManager sharedInstance] isExternalScreen]) 
-      {
-        rect.size = CGSizeMake( srect.size.height, srect.size.width );    
-      }
-      break;
-    case UIInterfaceOrientationLandscapeLeft:
-    case UIInterfaceOrientationLandscapeRight:
-      break;//just leave the rect as is
-  }  
-	m_glView.frame = rect;
+    orientation = toInterfaceOrientation;
+    CGRect srect = [IOSScreenManager getLandscapeResolution: [m_glView getCurrentScreen]];
+    CGRect rect = srect;;
+  
+    switch(toInterfaceOrientation)
+    {
+      case UIInterfaceOrientationPortrait:
+      case UIInterfaceOrientationPortraitUpsideDown:
+        if(![[IOSScreenManager sharedInstance] isExternalScreen])
+        {
+          rect.size = CGSizeMake( srect.size.height, srect.size.width );
+        }
+        break;
+      case UIInterfaceOrientationLandscapeLeft:
+      case UIInterfaceOrientationLandscapeRight:
+      case UIInterfaceOrientationUnknown:
+        break;//just leave the rect as is
+    }
+    m_glView.frame = rect;
+  }
 }
 
 - (UIInterfaceOrientation) getOrientation
@@ -674,7 +675,9 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
 //--------------------------------------------------------------
 - (IBAction)handleSingleFingerSingleTap:(UIGestureRecognizer *)sender 
 {
-  if( [m_glView isXBMCAlive] )//NO GESTURES BEFORE WE ARE UP AND RUNNING
+  //Allow the tap gesture during init
+  //(for allowing the user to tap away any messagboxes during init)
+  if( [m_glView isReadyToRun] )
   {
     CGPoint point = [sender locationOfTouch:0 inView:m_glView];
     point.x *= screenScale;
@@ -732,7 +735,6 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
     return ( nil );
 
   m_isPlayingBeforeInactive = NO;
-  m_isInterrupted = NO;
   m_bgTask = UIBackgroundTaskInvalid;
   m_playbackState = IOS_PLAYBACK_STOPPED;
 
@@ -750,22 +752,31 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
                  name: nil
                object: nil];
 
-  /* We start in landscape mode */
-  CGRect srect = frame;
-  srect.size = CGSizeMake( frame.size.height, frame.size.width );
   orientation = UIInterfaceOrientationLandscapeLeft;
-  
-  m_glView = [[IOSEAGLView alloc] initWithFrame: srect withScreen:screen];
-  [[IOSScreenManager sharedInstance] setView:m_glView];  
-  [m_glView setMultipleTouchEnabled:YES];
-  
-  /* Check if screen is Retina */
-  screenScale = [m_glView getScreenScale:screen];
 
-  [self.view addSubview: m_glView];
+#if __IPHONE_8_0
+  if (CDarwinUtils::GetIOSVersion() < 8.0)
+#endif
+  {
+    /* We start in landscape mode */
+    CGRect srect = frame;
+    // in ios sdks older then 8.0 the landscape mode is 90 degrees
+    // rotated
+    srect.size = CGSizeMake( frame.size.height, frame.size.width );
   
-  [self createGestureRecognizers];
-  [m_window addSubview: self.view];
+    m_glView = [[IOSEAGLView alloc] initWithFrame: srect withScreen:screen];
+    [[IOSScreenManager sharedInstance] setView:m_glView];
+    [m_glView setMultipleTouchEnabled:YES];
+  
+    /* Check if screen is Retina */
+    screenScale = [m_glView getScreenScale:screen];
+
+    [self.view addSubview: m_glView];
+  
+    [self createGestureRecognizers];
+    [m_window addSubview: self.view];
+  }
+
   [m_window makeKeyAndVisible];
   g_xbmcController = self;  
   
@@ -773,6 +784,29 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
 
   return self;
 }
+//--------------------------------------------------------------
+#if __IPHONE_8_0
+- (void)loadView
+{
+  [super loadView];
+  if (CDarwinUtils::GetIOSVersion() >= 8.0)
+  {
+    self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.view.autoresizesSubviews = YES;
+  
+    m_glView = [[IOSEAGLView alloc] initWithFrame:self.view.bounds withScreen:[UIScreen mainScreen]];
+    [[IOSScreenManager sharedInstance] setView:m_glView];
+    [m_glView setMultipleTouchEnabled:YES];
+  
+    /* Check if screen is Retina */
+    screenScale = [m_glView getScreenScale:[UIScreen mainScreen]];
+  
+    [self.view addSubview: m_glView];
+  
+    [self createGestureRecognizers];
+  }
+}
+#endif
 //--------------------------------------------------------------
 -(void)viewDidLoad
 {
@@ -851,21 +885,6 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
   [self resignFirstResponder];
 
 	[super viewDidUnload];	
-}
-//--------------------------------------------------------------
-- (void) initDisplayLink
-{
-	[m_glView initDisplayLink];
-}
-//--------------------------------------------------------------
-- (void) deinitDisplayLink
-{
-  [m_glView deinitDisplayLink];
-}
-//--------------------------------------------------------------
-- (double) getDisplayLinkFPS;
-{
-  return [m_glView getDisplayLinkFPS];
 }
 //--------------------------------------------------------------
 - (void) setFramebuffer
@@ -967,6 +986,7 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
   UIView *view = [m_window.subviews objectAtIndex:0];
   switch(newOrientation)
   {
+    case UIInterfaceOrientationUnknown:
     case UIInterfaceOrientationPortrait:
       angle = 0;
       break;
@@ -982,8 +1002,15 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
   }
   // reset the rotation of the view
   view.layer.transform = CATransform3DMakeRotation(angle, 0, 0.0, 1.0);
+#if __IPHONE_8_0
+  view.layer.bounds = view.bounds;
+#else
   [view setFrame:m_window.frame];
+#endif
   m_window.screen = screen;
+#if __IPHONE_8_0
+  [view setFrame:m_window.frame];
+#endif
 }
 //--------------------------------------------------------------
 - (void) remoteControlReceivedWithEvent: (UIEvent *) receivedEvent {
@@ -1041,23 +1068,23 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
     m_isPlayingBeforeInactive = YES;
     CApplicationMessenger::Get().MediaPauseIfPlaying();
   }
+  g_Windowing.OnAppFocusChange(false);
 }
 
 - (void)enterForeground
 {
   PRINT_SIGNATURE();
+  g_Windowing.OnAppFocusChange(true);
   // when we come back, restore playing if we were.
   if (m_isPlayingBeforeInactive)
   {
     CApplicationMessenger::Get().MediaUnPause();
     m_isPlayingBeforeInactive = NO;
   }
-  m_isInterrupted = NO;
 }
 
 - (void)becomeInactive
 {
-  LOG(@"%s: was interrupted: %d", __PRETTY_FUNCTION__,  m_isInterrupted);
   // if we were interrupted, already paused here
   // else if user background us or lock screen, only pause video here, audio keep playing.
   if (g_application.m_pPlayer->IsPlayingVideo() && !g_application.m_pPlayer->IsPaused())
@@ -1067,20 +1094,6 @@ AnnounceReceiver *AnnounceReceiver::g_announceReceiver = NULL;
   }
   // check whether we need disable network auto suspend.
   [self rescheduleNetworkAutoSuspend];
-}
-
-- (void)beginInterruption
-{
-  PRINT_SIGNATURE();
-  m_isInterrupted = YES;
-  CAEFactory::Suspend();
-}
-
-- (void)endInterruption
-{
-  PRINT_SIGNATURE();
-  if (CAEFactory::IsSuspended())
-    CAEFactory::Resume();
 }
 //--------------------------------------------------------------
 - (void)pauseAnimation

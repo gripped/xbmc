@@ -19,6 +19,7 @@
  *
  */
 
+#include <stdint.h>
 #include <vector>
 
 #include "profiles/Profile.h"
@@ -33,7 +34,7 @@ public:
   static CProfilesManager& Get();
 
   virtual void OnSettingsLoaded();
-  virtual bool OnSettingsSaved();
+  virtual void OnSettingsSaved();
   virtual void OnSettingsCleared();
 
   bool Load();
